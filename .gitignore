@@ -1,0 +1,6 @@
+game.exe
+*.exe
+*.o
+*.obj
+*.out
+w64DevKit/
