@@ -5,6 +5,8 @@
 #include "engine/fen.h"
 #include "ui/renderer.h"
 #include "engine/move.h"
+#include "engine/movegen.h"
+#include "engine/makemove.h"
 
 Renderer renderer;
 
@@ -18,11 +20,30 @@ int main(){
 
     Board board;
     Board_Init(&board);
-    SetTargetFPS(60);
 
+    SetTargetFPS(60);
+    
     InitRenderer(&renderer);
 
+// testing start
 
+    Move move = {
+        .fromRow = 7,
+        .fromCol = 7,
+        .toRow = 7,
+        .toCol = 6,
+        .promotion = EMPTY,
+        .flags = MOVE_NONE
+    };
+
+    MakeMove(&board, &move);
+
+    printf("White KS: %d\n", board.castling.whiteKingSide);
+    printf("White QS: %d\n", board.castling.whiteQueenSide);
+    printf("Black KS: %d\n", board.castling.blackKingSide);
+    printf("Black QS: %d\n", board.castling.blackQueenSide);
+
+// testing end
 
     while(!WindowShouldClose()){
 

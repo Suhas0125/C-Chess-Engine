@@ -1,6 +1,8 @@
 #ifndef BOARD_H
 #define BOARD_H
 
+#include <stdio.h>
+#include <stdbool.h>
 
 // Every possible piece that can occupy a square on the board
 // -------------------PIECES----------------------
@@ -61,6 +63,12 @@ typedef struct{
 void Board_Init(Board *board);
 
 void Board_Print(const Board *board);
+
+// Returns true if the piece is white.
+bool IsWhitePiece(Piece piece);
+
+// Returns true if the piece is black.
+bool IsBlackPiece(Piece piece);
 
 #endif
 

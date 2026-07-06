@@ -3,16 +3,14 @@
 // -------------------------
 // internal helper
 // -------------------------
-static Texture2D LoadPieceTexture(const char *path)
-{
+static Texture2D LoadPieceTexture(const char *path){
     return LoadTexture(path);
 }
 
 // -------------------------
 // piece drawing
 // -------------------------
-static void DrawPiece(Piece p, int row, int col, int tileSize, PieceTextures *tex)
-{
+static void DrawPiece(Piece p, int row, int col, int tileSize, PieceTextures *tex){
     if (p == EMPTY) return;
 
     Texture2D t;

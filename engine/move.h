@@ -7,12 +7,12 @@
 
 // Special move flags
 typedef enum{
-    MOVE_NONE = 0,
-    MOVE_CAPTURE = 1,
-    MOVE_DOUBLE_PAWN = 2,
-    MOVE_EN_PASSANT = 4,
-    MOVE_CASTLING = 8,
-    MOVE_PROMOTION = 16
+    MOVE_NONE        = 0,
+    MOVE_CAPTURE     = 1 << 0, // 1
+    MOVE_DOUBLE_PAWN = 1 << 1, // 2
+    MOVE_EN_PASSANT  = 1 << 2, // 4
+    MOVE_CASTLING    = 1 << 3, // 8
+    MOVE_PROMOTION   = 1 << 4  // 16
 } MoveFlags;
 
 // One chess move

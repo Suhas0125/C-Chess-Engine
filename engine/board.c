@@ -99,3 +99,13 @@ void Board_Print(const Board *board){
     }
     printf("\n"); // newline after whole board
 }
+
+// Returns true if the piece is white.
+bool IsWhitePiece(Piece piece){
+    return piece >= W_PAWN && piece <= W_KING;
+}
+
+// Returns true if the piece is black.
+bool IsBlackPiece(Piece piece){
+    return piece >= B_PAWN && piece <= B_KING;
+}
