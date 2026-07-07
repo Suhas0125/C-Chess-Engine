@@ -98,6 +98,48 @@ void Board_Print(const Board *board){
         printf("\n"); // newline when row is completed
     }
     printf("\n"); // newline after whole board
+
+    printf("\n");
+    //-------------print castling rights--------------
+    printf("Side to move : %s\n",
+        board->sideToMove == SIDE_WHITE ? "White" : "Black");
+
+    printf("Castling     : ");
+
+    if (!board->castling.whiteKingSide &&
+        !board->castling.whiteQueenSide &&
+        !board->castling.blackKingSide &&
+        !board->castling.blackQueenSide){
+        printf("-");
+    }
+    else{
+        if (board->castling.whiteKingSide)  printf("K");
+        if (board->castling.whiteQueenSide) printf("Q");
+        if (board->castling.blackKingSide)  printf("k");
+        if (board->castling.blackQueenSide) printf("q");
+    }
+
+    printf("\n");
+    //-------------------print en passant squares---------------
+    printf("En Passant   : ");
+
+    if (board->enPassantSquare == -1){
+        printf("-\n");
+    }
+    else{
+        int row = board->enPassantSquare / 8;
+        int col = board->enPassantSquare % 8;
+
+        char file = 'a' + col;
+        char rank = '8' - row;
+
+        printf("%c%c\n", file, rank);
+    }
+
+    //------------half moves and full moves---------------
+    printf("Halfmove     : %d\n", board->halfmoveClock);
+    printf("Fullmove     : %d\n", board->fullmoveNumber);
+    printf("\n");
 }
 
 // Returns true if the piece is white.
@@ -108,4 +150,9 @@ bool IsWhitePiece(Piece piece){
 // Returns true if the piece is black.
 bool IsBlackPiece(Piece piece){
     return piece >= B_PAWN && piece <= B_KING;
+}
+
+// Copies the complete board state from src to dest.
+void Board_Copy(Board *dest, const Board *src){
+    *dest = *src;
 }

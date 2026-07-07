@@ -48,4 +48,7 @@ void MoveList_Add(
     int flags
 );
 
+// Prints every move in a MoveList (for debugging).
+void MoveList_Print(const MoveList *list);
+
 #endif

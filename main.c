@@ -7,6 +7,10 @@
 #include "engine/move.h"
 #include "engine/movegen.h"
 #include "engine/makemove.h"
+#include "engine/history.h"
+#include "engine/attack.h"
+#include "engine/legalmove.h"
+#include "engine/gamestate.h"
 
 Renderer renderer;
 
@@ -27,21 +31,17 @@ int main(){
 
 // testing start
 
-    Move move = {
-        .fromRow = 7,
-        .fromCol = 7,
-        .toRow = 7,
-        .toCol = 6,
-        .promotion = EMPTY,
-        .flags = MOVE_NONE
-    };
+    History history;
+    History_Init(&history);
 
-    MakeMove(&board, &move);
+    // Store the same position three times.
+    History_Push(&history, &board);
+    History_Push(&history, &board);
+    history.boards[1].sideToMove = SIDE_BLACK;
+    History_Push(&history, &board);
 
-    printf("White KS: %d\n", board.castling.whiteKingSide);
-    printf("White QS: %d\n", board.castling.whiteQueenSide);
-    printf("Black KS: %d\n", board.castling.blackKingSide);
-    printf("Black QS: %d\n", board.castling.blackQueenSide);
+    printf("Threefold repetition: %d\n",
+        IsDrawByThreefoldRepetition(&board, &history));
 
 // testing end
 
@@ -61,8 +61,12 @@ int main(){
             if (mouseRow != -1 && mouseCol != -1){
                 Piece p = board.squares[mouseRow][mouseCol];
 
-                printf("Clicked square: %d,%d Piece: %d\n",
-                    mouseRow, mouseCol, p);
+                // Convert array indices to chess notation.
+                char file = 'a' + mouseCol;
+                char rank = '8' - mouseRow;
+
+                printf("Clicked square: %c%c (row=%d, col=%d) Piece: %d\n",
+                    file, rank, mouseRow, mouseCol, p);
             }
         }
 

@@ -1,7 +1,10 @@
 #include "makemove.h"
 
 // Executes a move on the board.
-void MakeMove(Board *board, const Move *move){
+void MakeMove(Board *board,History *history, const Move *move){
+    // Save the current position before modifying it.
+    History_Push(history, board);
+    
     // Get the moving piece.
     Piece piece = board->squares[move->fromRow][move->fromCol];
 
@@ -151,4 +154,9 @@ void MakeMove(Board *board, const Move *move){
 
     // Switch side to move.
     board->sideToMove = (board->sideToMove == SIDE_WHITE) ? SIDE_BLACK : SIDE_WHITE;
+}
+
+// Restores the previous board state.
+int UndoMove(Board *board, History *history){
+    return History_Pop(history, board);
 }

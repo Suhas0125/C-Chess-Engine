@@ -70,6 +70,9 @@ bool IsWhitePiece(Piece piece);
 // Returns true if the piece is black.
 bool IsBlackPiece(Piece piece);
 
+// Copies the complete board state from src to dest.
+void Board_Copy(Board *dest, const Board *src);
+
 #endif
 
 

@@ -1,43 +1,6 @@
 #include "movegen.h"
-
-// All possible knight movement offsets.
-static const int knightMoves[8][2] = {
-    {-2, -1}, {-2,  1},
-    {-1, -2}, {-1,  2},
-    { 1, -2}, { 1,  2},
-    { 2, -1}, { 2,  1}
-};
-
-// All bishop movement directions.
-static const int bishopDirections[4][2] = {
-    {-1, -1},
-    {-1,  1},
-    { 1, -1},
-    { 1,  1}
-};
-
-// All rook movement directions.
-static const int rookDirections[4][2] = {
-    {-1,  0},
-    { 1,  0},
-    { 0, -1},
-    { 0,  1}
-};
-
-// All queen movement directions.
-static const int queenDirections[8][2] = {
-    {-1, -1}, {-1,  1},
-    { 1, -1}, { 1,  1},
-    {-1,  0}, { 1,  0},
-    { 0, -1}, { 0,  1} // all 8 directions
-};
-
-// All king movement directions.
-static const int kingDirections[8][2] = {
-    {-1,-1}, {-1,0}, {-1,1},
-    { 0,-1},         { 0,1},
-    { 1,-1}, { 1,0}, { 1,1}
-};
+#include "directions.h"
+#include "attack.h"
 
 // Generates all pseudo-legal moves.
 void GenerateMoves(const Board *board, MoveList *list){
@@ -423,6 +386,7 @@ void GenerateKingMoves(const Board *board, MoveList *list){
                 continue;
             
             bool whiteKing = IsWhitePiece(piece);
+            Side side = whiteKing ? SIDE_WHITE : SIDE_BLACK;
 
             // Check all adjacent squares.
             for (int i = 0; i < 8; i++){
@@ -459,59 +423,75 @@ void GenerateKingMoves(const Board *board, MoveList *list){
                 }
             }
 
-            // Generate white castling moves.
-            if (piece == W_KING){
-                // Kingside castling.
-                if (board->castling.whiteKingSide && board->squares[7][5] == EMPTY && board->squares[7][6] == EMPTY){
-                    MoveList_Add(
-                        list,
-                        row, col,
-                        row, col + 2,
-                        EMPTY,
-                        MOVE_CASTLING
-                    );
+            // Castle only if King is not in check and other conditions satisfy
+            if(!IsKingInCheck(board, side)){
+                // Generate white castling moves.
+                if (piece == W_KING){
+
+                    // Kingside castling.
+                    if (board->castling.whiteKingSide &&
+                        board->squares[7][5] == EMPTY &&
+                        board->squares[7][6] == EMPTY &&
+                        !IsSquareAttacked(board, 7, 5, SIDE_BLACK) &&
+                        !IsSquareAttacked(board, 7, 6, SIDE_BLACK)){
+                        MoveList_Add(
+                            list,
+                            row, col,
+                            row, col + 2,
+                            EMPTY,
+                            MOVE_CASTLING
+                        );
+                    }
+
+                    // Queenside castling.
+                    if (board->castling.whiteQueenSide &&
+                        board->squares[7][3] == EMPTY &&
+                        board->squares[7][2] == EMPTY &&
+                        board->squares[7][1] == EMPTY &&
+                        !IsSquareAttacked(board, 7, 3, SIDE_BLACK) &&
+                        !IsSquareAttacked(board, 7, 2, SIDE_BLACK)){
+                        MoveList_Add(
+                            list,
+                            row, col,
+                            row, col - 2,
+                            EMPTY,
+                            MOVE_CASTLING
+                        );
+                    }
                 }
 
-                // Queenside castling.
-                if (board->castling.whiteQueenSide && board->squares[7][3] == EMPTY && board->squares[7][2] == EMPTY &&
-                    board->squares[7][1] == EMPTY){
-                    MoveList_Add(
-                        list,
-                        row, col,
-                        row, col - 2,
-                        EMPTY,
-                        MOVE_CASTLING
-                    );
-                }
-            }
+                // Generate black castling moves.
+                if (piece == B_KING){
+                    // Kingside castling.
+                    if (board->castling.blackKingSide &&
+                        board->squares[0][5] == EMPTY &&
+                        board->squares[0][6] == EMPTY &&
+                        !IsSquareAttacked(board, 0, 5, SIDE_WHITE) &&
+                        !IsSquareAttacked(board, 0, 6, SIDE_WHITE)){
+                        MoveList_Add(
+                            list,
+                            row, col,
+                            row, col + 2,
+                            EMPTY,
+                            MOVE_CASTLING
+                        );
+                    }
 
-            // Generate black castling moves.
-            if (piece == B_KING){
-                // Kingside castling.
-                if (board->castling.blackKingSide &&
-                    board->squares[0][5] == EMPTY &&
-                    board->squares[0][6] == EMPTY){
-                    MoveList_Add(
-                        list,
-                        row, col,
-                        row, col + 2,
-                        EMPTY,
-                        MOVE_CASTLING
-                    );
-                }
-
-                // Queenside castling.
-                if (board->castling.blackQueenSide &&
-                    board->squares[0][3] == EMPTY &&
-                    board->squares[0][2] == EMPTY &&
-                    board->squares[0][1] == EMPTY){
-                    MoveList_Add(
-                        list,
-                        row, col,
-                        row, col - 2,
-                        EMPTY,
-                        MOVE_CASTLING
-                    );
+                    // Queenside castling.
+                    if (board->castling.blackQueenSide &&
+                        board->squares[0][3] == EMPTY &&
+                        board->squares[0][2] == EMPTY &&
+                        board->squares[0][1] == EMPTY &&
+                        !IsSquareAttacked(board, 0, 3, SIDE_WHITE) &&
+                        !IsSquareAttacked(board, 0, 2, SIDE_WHITE)){
+                        MoveList_Add(
+                            list,
+                            row, col,
+                            row, col - 2,
+                            EMPTY,
+                            MOVE_CASTLING
+                        );
+                    }
                 }
             }
         }
