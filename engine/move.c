@@ -58,3 +58,24 @@ void MoveList_Print(const MoveList *list){
     }
 }
 
+// Prints a single move.
+void Move_Print(const Move *move){
+
+    char fromFile = 'a' + move->fromCol;
+    char fromRank = '8' - move->fromRow;
+
+    char toFile = 'a' + move->toCol;
+    char toRank = '8' - move->toRow;
+
+    printf("%c%c -> %c%c\n",
+           fromFile, fromRank,
+           toFile, toRank);
+
+    // Print promotion piece, if any.
+    if (move->flags & MOVE_PROMOTION){
+        printf(" (promotion: %d)", move->promotion);
+    }
+
+    printf("\n");
+}
+

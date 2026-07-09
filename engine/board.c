@@ -156,3 +156,4 @@ bool IsBlackPiece(Piece piece){
 void Board_Copy(Board *dest, const Board *src){
     *dest = *src;
 }
+

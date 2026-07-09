@@ -51,4 +51,7 @@ void MoveList_Add(
 // Prints every move in a MoveList (for debugging).
 void MoveList_Print(const MoveList *list);
 
+// Prints a single move.
+void Move_Print(const Move *move);
+
 #endif

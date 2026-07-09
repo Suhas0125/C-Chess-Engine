@@ -11,6 +11,9 @@
 #include "engine/attack.h"
 #include "engine/legalmove.h"
 #include "engine/gamestate.h"
+#include "engine/evaluate.h"
+#include "engine/pst.h"
+#include "engine/search.h"
 
 Renderer renderer;
 
@@ -28,24 +31,31 @@ int main(){
     SetTargetFPS(60);
     
     InitRenderer(&renderer);
-
-// testing start
-
+    
     History history;
     History_Init(&history);
 
-    // Store the same position three times.
-    History_Push(&history, &board);
-    History_Push(&history, &board);
-    history.boards[1].sideToMove = SIDE_BLACK;
-    History_Push(&history, &board);
+    // Currently selected square (-1 means no selection).
+    int selectedRow = -1;
+    int selectedCol = -1;
 
-    printf("Threefold repetition: %d\n",
-        IsDrawByThreefoldRepetition(&board, &history));
+    // Stores the legal moves for the currently selected piece.
+    MoveList selectedMoves;
+    MoveList_Init(&selectedMoves);
+
+// testing start
+
+    
 
 // testing end
 
     while(!WindowShouldClose()){
+
+        // engine testing start
+
+        
+
+        // engine testing end
 
         BeginDrawing();
         ClearBackground(RAYWHITE);
@@ -57,20 +67,163 @@ int main(){
         if (mouseRow < 0 || mouseRow > 7) mouseRow = -1;
         if (mouseCol < 0 || mouseCol > 7) mouseCol = -1;
 
-        if (IsMouseButtonPressed(MOUSE_LEFT_BUTTON)){
-            if (mouseRow != -1 && mouseCol != -1){
-                Piece p = board.squares[mouseRow][mouseCol];
+        // Handle left mouse click
+        if (IsMouseButtonPressed(MOUSE_LEFT_BUTTON))
+        {
+            if (mouseRow != -1 && mouseCol != -1)
+            {
+                printf("\n========================================\n");
+                printf("Move %d\n", board.fullmoveNumber);
+                printf("Side to move : %s\n",
+                    board.sideToMove == SIDE_WHITE ? "WHITE" : "BLACK");
 
-                // Convert array indices to chess notation.
-                char file = 'a' + mouseCol;
-                char rank = '8' - mouseRow;
+                //--------------------------------------------------
+                // Print every legal move in current position
+                //--------------------------------------------------
 
-                printf("Clicked square: %c%c (row=%d, col=%d) Piece: %d\n",
-                    file, rank, mouseRow, mouseCol, p);
+                MoveList allLegalMoves;
+                MoveList_Init(&allLegalMoves);
+
+                GenerateLegalMoves(&board, &history, &allLegalMoves);
+
+                printf("Legal moves available : %d\n", allLegalMoves.count);
+                MoveList_Print(&allLegalMoves);
+
+                //--------------------------------------------------
+                // Try playing selected move
+                //--------------------------------------------------
+
+                int movePlayed = 0;
+
+                for (int i = 0; i < selectedMoves.count; i++)
+                {
+                    Move move = selectedMoves.moves[i];
+
+                    if (move.toRow == mouseRow &&
+                        move.toCol == mouseCol)
+                    {
+                        printf("\nHuman plays:\n");
+                        Move_Print(&move);
+
+                        MakeMove(&board, &history, &move);
+
+                        selectedRow = -1;
+                        selectedCol = -1;
+                        MoveList_Init(&selectedMoves);
+
+                        movePlayed = 1;
+                        break;
+                    }
+                }
+
+                //--------------------------------------------------
+                // Engine turn
+                //--------------------------------------------------
+
+                if (movePlayed)
+                {
+                    printf("\n----------------------------------------\n");
+                    printf("Engine turn (%s)\n",
+                        board.sideToMove == SIDE_WHITE ?
+                        "WHITE" : "BLACK");
+
+                    MoveList engineLegalMoves;
+                    MoveList_Init(&engineLegalMoves);
+
+                    GenerateLegalMoves(&board, &history, &engineLegalMoves);
+
+                    printf("Engine legal moves : %d\n",
+                        engineLegalMoves.count);
+
+                    MoveList_Print(&engineLegalMoves);
+
+                    if (engineLegalMoves.count == 0)
+                    {
+                        if (IsKingInCheck(&board, board.sideToMove))
+                        {
+                            printf("\n***** CHECKMATE *****\n");
+                        }
+                        else
+                        {
+                            printf("\n***** STALEMATE *****\n");
+                        }
+
+                        continue;
+                    }
+
+                    SearchResult result =
+                        SearchBestMove(&board, &history, 4);
+
+                    printf("\nSearch result\n");
+                    printf("Best move : ");
+                    Move_Print(&result.move);
+
+                    printf("Evaluation : %d\n", result.score);
+                    printf("Nodes      : %llu\n", result.nodes);
+
+                    MakeMove(&board, &history, &result.move);
+
+                    printf("\nEngine played successfully.\n");
+
+                    continue;
+                }
+
+                //--------------------------------------------------
+                // Selecting a white piece
+                //--------------------------------------------------
+
+                Piece piece = board.squares[mouseRow][mouseCol];
+
+                if (IsWhitePiece(piece))
+                {
+                    selectedRow = mouseRow;
+                    selectedCol = mouseCol;
+
+                    MoveList legalMoves;
+                    MoveList_Init(&legalMoves);
+
+                    GenerateLegalMoves(&board, &history, &legalMoves);
+
+                    MoveList_Init(&selectedMoves);
+
+                    for (int i = 0; i < legalMoves.count; i++)
+                    {
+                        Move move = legalMoves.moves[i];
+
+                        if (move.fromRow == selectedRow &&
+                            move.fromCol == selectedCol)
+                        {
+                            MoveList_Add(
+                                &selectedMoves,
+                                move.fromRow,
+                                move.fromCol,
+                                move.toRow,
+                                move.toCol,
+                                move.promotion,
+                                move.flags
+                            );
+                        }
+                    }
+
+                    printf("\nSelected piece legal moves:\n");
+                    MoveList_Print(&selectedMoves);
+                }
+                else
+                {
+                    selectedRow = -1;
+                    selectedCol = -1;
+                    MoveList_Init(&selectedMoves);
+                }
             }
         }
 
-        DrawGame(&renderer, &board);
+        DrawGame(
+            &renderer,
+            &board,
+            selectedRow,
+            selectedCol,
+            &selectedMoves
+        );
 
         EndDrawing();
     }

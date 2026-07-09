@@ -1,4 +1,5 @@
 #include "renderer.h"
+#include "../engine/move.h"
 
 // -------------------------
 // internal helper
@@ -84,7 +85,13 @@ void UnloadRenderer(Renderer *r)
     UnloadTexture(r->tex.bK);
 }
 
-void DrawGame(Renderer *r, Board *board)
+void DrawGame(
+    Renderer *r,
+    Board *board,
+    int selectedRow,
+    int selectedCol,
+    MoveList *selectedMoves
+)
 {
     int ts = r->tileSize;
 
@@ -95,6 +102,10 @@ void DrawGame(Renderer *r, Board *board)
         {
             Color color = ((row + col) % 2 == 0) ? BEIGE : BROWN;
 
+            if (row == selectedRow && col == selectedCol){
+                color = GOLD;
+            }
+
             DrawRectangle(
                 col * ts,
                 row * ts,
@@ -103,6 +114,19 @@ void DrawGame(Renderer *r, Board *board)
                 color
             );
         }
+    }
+
+    // highlight selected moves
+    for (int i = 0; i < selectedMoves->count; i++)
+    {
+        Move move = selectedMoves->moves[i];
+
+        DrawCircle(
+            move.toCol * ts + ts / 2,
+            move.toRow * ts + ts / 2,
+            ts / 8,
+            DARKGREEN
+        );
     }
 
     // draw pieces

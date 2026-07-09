@@ -3,6 +3,7 @@
 
 #include "raylib.h"
 #include "../engine/board.h"
+#include "../engine/move.h"
 
 typedef struct {
     Texture2D wP, wN, wB, wR, wQ, wK;
@@ -20,6 +21,12 @@ void InitRenderer(Renderer *r);
 void UnloadRenderer(Renderer *r);
 
 // draw
-void DrawGame(Renderer *r, Board *board);
+void DrawGame(
+    Renderer *r,
+    Board *board,
+    int selectedRow,
+    int selectedCol,
+    MoveList *selectedMoves
+);
 
 #endif

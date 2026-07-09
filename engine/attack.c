@@ -168,3 +168,4 @@ int IsKingInCheck(const Board *board, Side side){
 
     return IsSquareAttacked(board, kingRow, kingCol, opponent);
 }
+
