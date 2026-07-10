@@ -1,4 +1,5 @@
 #include <stdio.h>
+#include <string.h>
 
 #include "raylib.h"
 #include "engine/board.h"
@@ -14,6 +15,9 @@
 #include "engine/evaluate.h"
 #include "engine/pst.h"
 #include "engine/search.h"
+#include "engine/debug.h"
+#include "engine/perft.h"
+#include "engine/tests.h"
 
 Renderer renderer;
 
@@ -27,6 +31,12 @@ int main(){
 
     Board board;
     Board_Init(&board);
+    
+    // fen test start
+
+    
+
+    // fen test end
 
     SetTargetFPS(60);
     
@@ -45,7 +55,8 @@ int main(){
 
 // testing start
 
-    
+    // Run the full automated suite before the Raylib window loop
+    RunAutomatedPerftSuite(&board, &history);
 
 // testing end
 
@@ -68,6 +79,7 @@ int main(){
         if (mouseCol < 0 || mouseCol > 7) mouseCol = -1;
 
         // Handle left mouse click
+        /*
         if (IsMouseButtonPressed(MOUSE_LEFT_BUTTON))
         {
             if (mouseRow != -1 && mouseCol != -1)
@@ -216,6 +228,7 @@ int main(){
                 }
             }
         }
+        */
 
         DrawGame(
             &renderer,

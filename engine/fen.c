@@ -1,7 +1,11 @@
 #include "fen.h"
+
 #include <string.h>
 #include <stdio.h>
+#include <stdlib.h>
+#include <ctype.h>
 
+// board to fen helpers
 static char pieceToChar(Piece p)
 {
     switch (p)
@@ -44,6 +48,7 @@ static void squareToAlgebraic(int sq, char *out){
     out[2] = '\0';
 }
 
+// given board, construct fen
 void Board_ToFEN(const Board *b, char *out){
     int index = 0;
 
@@ -129,4 +134,174 @@ void Board_ToFEN(const Board *b, char *out){
     index += sprintf(out + index, "%d", b->fullmoveNumber);
 
     out[index] = '\0';
+}
+
+// fen to board helpers
+static Piece CharToPiece(char c){
+    switch (c){
+        case 'P': return W_PAWN;
+        case 'N': return W_KNIGHT;
+        case 'B': return W_BISHOP;
+        case 'R': return W_ROOK;
+        case 'Q': return W_QUEEN;
+        case 'K': return W_KING;
+
+        case 'p': return B_PAWN;
+        case 'n': return B_KNIGHT;
+        case 'b': return B_BISHOP;
+        case 'r': return B_ROOK;
+        case 'q': return B_QUEEN;
+        case 'k': return B_KING;
+
+        default:
+            return EMPTY;
+    }
+}
+
+static int algebraicToSquare(const char *str){
+    if (str[0] == '-')
+        return -1;
+
+    int col = str[0] - 'a';
+    int row = '8' - str[1];
+
+    return row * 8 + col;
+}
+
+// Construct board from given fen
+int Board_FromFEN(Board *board, const char *fen){
+
+    //--------------------------------------------------
+    // Clear board
+    //--------------------------------------------------
+    for (int row = 0; row < 8; row++){
+        for (int col = 0; col < 8; col++){
+            board->squares[row][col] = EMPTY;
+        }
+    }
+
+    board->castling.whiteKingSide = 0;
+    board->castling.whiteQueenSide = 0;
+    board->castling.blackKingSide = 0;
+    board->castling.blackQueenSide = 0;
+
+    board->enPassantSquare = -1;
+    board->halfmoveClock = 0;
+    board->fullmoveNumber = 1;
+
+    //--------------------------------------------------
+    // 1. Piece placement
+    //--------------------------------------------------
+
+    int row = 0;
+    int col = 0;
+
+    while (*fen && *fen != ' '){
+        if (*fen == '/'){
+            row++;
+            col = 0;
+        }
+        else if (isdigit((unsigned char)*fen)){
+            col += *fen - '0';
+        }
+        else{
+            board->squares[row][col] = CharToPiece(*fen);
+            col++;
+        }
+
+        fen++;
+    }
+
+    if (*fen != ' ')
+        return 0;
+
+    fen++;
+
+    //--------------------------------------------------
+    // 2. Side to move
+    //--------------------------------------------------
+
+    if (*fen == 'w')
+        board->sideToMove = SIDE_WHITE;
+    else if (*fen == 'b')
+        board->sideToMove = SIDE_BLACK;
+    else
+        return 0;
+
+    fen += 2;
+
+    //--------------------------------------------------
+    // 3. Castling rights
+    //--------------------------------------------------
+
+    if (*fen == '-'){
+        fen++;
+    }
+    else{
+        while (*fen != ' '){
+            switch (*fen){
+                case 'K':
+                    board->castling.whiteKingSide = 1;
+                    break;
+
+                case 'Q':
+                    board->castling.whiteQueenSide = 1;
+                    break;
+
+                case 'k':
+                    board->castling.blackKingSide = 1;
+                    break;
+
+                case 'q':
+                    board->castling.blackQueenSide = 1;
+                    break;
+            }
+
+            fen++;
+        }
+    }
+
+    fen++;
+
+    //--------------------------------------------------
+    // 4. En passant
+    //--------------------------------------------------
+
+    if (*fen == '-'){
+        board->enPassantSquare = -1;
+        fen++;
+    }
+    else{
+        board->enPassantSquare = algebraicToSquare(fen);
+        fen += 2;
+    }
+
+    fen++;
+
+    //--------------------------------------------------
+    // 5. Halfmove clock
+    //--------------------------------------------------
+
+    board->halfmoveClock = atoi(fen);
+
+    while (*fen != ' ')
+        fen++;
+
+    fen++;
+
+    //--------------------------------------------------
+    // 6. Fullmove number
+    //--------------------------------------------------
+
+    board->fullmoveNumber = atoi(fen);
+
+    return 1;
+}
+
+// print fen string for current board
+void PrintFEN(const Board *board){
+    char fen[100];
+    Board_ToFEN(board, fen);
+
+    printf("%s\n", fen);
 }
