@@ -13,6 +13,11 @@ typedef struct{
     int depth;
 } SearchResult;
 
+// time controls
+extern bool searchStopped;
+extern long long startTimeMs;
+extern long long stopTimeMs;
+extern bool timeControlEnabled;
 
 // Quiescence Search: Evaluates tactical captures beyond depth 0
 int QuiescenceSearch(Board *board, History *history, int alpha, int beta, unsigned long long *nodes);
@@ -27,7 +32,7 @@ int Negamax(Board *board,
             unsigned long long *nodes);
 
 // Returns the best move found at the given search depth.
-SearchResult SearchBestMove(Board *board, History *history, int depth);
+SearchResult SearchBestMove(Board *board, History *history, int depth, long long allottedTimeMs);
 
 // Finds and plays the best move for the current side.
 SearchResult MakeEngineMove(Board *board,

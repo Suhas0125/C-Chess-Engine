@@ -10,6 +10,22 @@
 #include "attack.h"
 #include "gamestate.h"
 #include "tt.h" // step 6E
+#include "time_utils.h" // step 7C
+
+// --- Time Control Globals ---
+bool searchStopped = false;
+long long startTimeMs = 0;
+long long stopTimeMs = 0;
+bool timeControlEnabled = false;
+
+// Helper to check time limit
+static void CheckTime(void) {
+    if (timeControlEnabled && !searchStopped) {
+        if (GetTimeMs() >= stopTimeMs) {
+            searchStopped = true;
+        }
+    }
+}
 
 // Safe infinity bounds to prevent C's two's-complement INT_MIN negation bug
 #define INFINITY_SCORE 1000000
@@ -116,6 +132,12 @@ static void SortMoves(const Board *board, MoveList *list, Move *pvMove, int ply)
 // Evaluates tactical captures beyond depth 0 to prevent the Horizon Effect
 int QuiescenceSearch(Board *board, History *history, int alpha, int beta, unsigned long long *nodes){
 
+    // Time Check in QSearch
+    if (((*nodes) & 2047) == 0) {
+        CheckTime();
+    }
+    if (searchStopped) return 0;
+
     (*nodes)++;
 
     // 1. "Stand-pat" evaluation: what is the score if we do nothing?
@@ -174,6 +196,15 @@ int Negamax(Board *board,
             int beta,
             unsigned long long *nodes)
 {
+
+    // Check Time periodically
+    if (((*nodes) & 2047) == 0) {
+        CheckTime();
+    }
+    
+    // If time is up, abort immediately and return 0 (score will be discarded by SearchBestMove)
+    if (searchStopped) return 0;
+    
     // Count this position as one searched node.
     (*nodes)++;
 
@@ -198,7 +229,12 @@ int Negamax(Board *board,
     int ttScore;
     
     if (TT_Probe(board->hashKey, depth, alpha, beta, &ttScore, &ttMove)) {
-        return ttScore; // Instant cutoff! We already calculated this position.
+        // FIX: Never return a TT cutoff at the root node (ply == 0).
+        // We still probe it so we can extract the 'ttMove' for move ordering,
+        // but we MUST evaluate the root to guarantee we return a move to the GUI!
+        if (ply > 0) {
+            return ttScore; 
+        }
     }
     // ------------------------------------
 
@@ -250,6 +286,9 @@ int Negamax(Board *board,
 
         // Restore the previous position.
         UndoMove(board, history);
+
+        // Discard the result of this move if we ran out of time while evaluating it
+        if (searchStopped) return 0;
 
         // Keep the best score found so far.
         if (score > bestScore){
@@ -307,7 +346,7 @@ int Negamax(Board *board,
 }
 
 // Searches all legal moves and returns the best one.
-SearchResult SearchBestMove(Board *board, History *history, int maxDepth){
+SearchResult SearchBestMove(Board *board, History *history, int maxDepth, long long allottedTimeMs){
 
     SearchResult result;
 
@@ -316,11 +355,24 @@ SearchResult SearchBestMove(Board *board, History *history, int maxDepth){
     result.depth = maxDepth;
     result.score = -INFINITY_SCORE;
 
+    // Save the best move found in previous fully completed depths
+    SearchResult bestResult = result;
+
     pvLineLength = 0; // Reset PV for new search
     
     // Clear heuristics before a new root search
     memset(killerMoves, 0, sizeof(killerMoves));
     memset(historyTable, 0, sizeof(historyTable));
+
+    // --- SETUP TIME CONTROL ---
+    searchStopped = false;
+    if (allottedTimeMs > 0) {
+        timeControlEnabled = true;
+        startTimeMs = GetTimeMs();
+        stopTimeMs = startTimeMs + allottedTimeMs;
+    } else {
+        timeControlEnabled = false;
+    }
 
     printf("\n========== ITERATIVE DEEPENING ==========\n");
 
@@ -331,17 +383,25 @@ SearchResult SearchBestMove(Board *board, History *history, int maxDepth){
         pvLength[0] = 0;
 
         int score = Negamax(board, history, currentDepth, 0, -INFINITY_SCORE, INFINITY_SCORE, &result.nodes);
+
+        // If the search was interrupted by time, DO NOT trust the score/PV of this incomplete depth
+        if (searchStopped) {
+            break;
+        }
         
-        // Save the best line to feed into the next iteration
+        // Search completed successfully for this depth, update our best move
         pvLineLength = pvLength[0];
         for (int i = 0; i < pvLineLength; i++) {
             pvLine[i] = pvArray[0][i];
         }
 
         result.score = score;
+        result.depth = currentDepth; // track the highest fully completed depth
         if (pvLineLength > 0) {
             result.move = pvLine[0];
         }
+
+        bestResult = result;
 
         // Print engine thinking for this depth
         printf("info depth %d score cp %d nodes %llu pv ", currentDepth, score, result.nodes);
@@ -353,10 +413,13 @@ SearchResult SearchBestMove(Board *board, History *history, int maxDepth){
             printf("%c%c%c%c ", pF, pR, pTF, pTR);
         }
         printf("\n");
+
+        // If we found a mate, no need to keep searching deeper
+        if (score >= CHECKMATE_SCORE - MAX_PLY) break;
     }
 
     printf("=========================================\n");
-    return result;
+    return bestResult;
 }
 
 // Finds, executes, and returns the best move for the current side.
@@ -365,7 +428,7 @@ SearchResult MakeEngineMove(Board *board,
                             int depth){
 
     // Search for the best move.
-    SearchResult result = SearchBestMove(board, history, depth);
+    SearchResult result = SearchBestMove(board, history, depth, -1);
 
     // No legal move (checkmate or stalemate)
     if (result.score <= -CHECKMATE_SCORE + 100 ||
