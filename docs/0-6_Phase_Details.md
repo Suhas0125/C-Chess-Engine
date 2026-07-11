@@ -141,23 +141,40 @@ A mathematically verified legal move generator. Successfully calculated over 6.8
 
 ---
 
-# Phase 6 — Search Improvements (Next)
+## Phase 6 - Search Optimization & Heuristics ✅
 
-Upcoming Features:
+### 6A: Quiescence Search
+* **Files:** `engine/search.c`
+* **`QuiescenceSearch()`:** Evaluates only tactical capture moves at depth 0 to resolve the Horizon Effect and prevent blind blunders.
+* **`Negamax()`:** Updated to transition into Q-Search instead of static evaluation at depth 0.
+* **`SearchBestMove()`:** Fixed root Alpha-Beta boundaries (`INFINITY_SCORE`) to prevent integer negation overflow bugs.
 
-* Move ordering
-* Iterative Deepening
-* Zobrist Hashing
-* Transposition Tables
-* Quiescence Search
-* Principal Variation
-* Killer Moves
-* History Heuristic
+### 6B: Basic Move Ordering (MVV-LVA)
+* **Files:** `engine/evaluate.h`, `engine/evaluate.c`, `engine/search.c`
+* **`GetPieceValue()`:** Un-statted and exposed globally from `evaluate.c` to share piece values.
+* **`SortMoves()`:** Sorts legal moves so Alpha-Beta evaluates good captures (e.g., Pawn takes Queen) first, maximizing pruning efficiency and preventing Q-Search explosions.
 
-### Goal
+### 6C: Iterative Deepening & Principal Variation (PV)
+* **Files:** `engine/search.h`, `engine/search.c`
+* **`Negamax()`:** Added a `ply` parameter and logic to record the "best line" (PV) in a triangular array (`pvArray`).
+* **`SearchBestMove()`:** Loops depths incrementally (1 to max), feeding the previous depth's PV into the next iteration to search the absolute best move first. Outputs UCI-style `info depth... pv...`.
 
-Much stronger and much faster engine. Trusting our verified move generator, all focus shifts to intelligence and calculation speed.
+### 6D: Zobrist Hashing
+* **Files:** `engine/zobrist.h`, `engine/zobrist.c`, `engine/board.h`, `engine/makemove.c`
+* **`Zobrist_Init()`:** Generates 64-bit pseudo-random numbers for all piece-square combinations and board rights.
+* **`Zobrist_GenerateKey()`:** XORs board features to create a mathematically unique 64-bit integer ID for any board position.
+* **`Board` / `MakeMove()`:** Added `hashKey` to the board struct; updated `MakeMove()` to recalculate the hash automatically.
 
+### 6E: Transposition Tables (TT)
+* **Files:** `engine/tt.h`, `engine/tt.c`, `engine/search.c`
+* **`TT_Init()`, `TT_Store()`, `TT_Probe()`:** Allocates a dynamic hash table to save and retrieve evaluations (EXACT, ALPHA, BETA bounds) and best moves for previously calculated positions.
+* **`Negamax()`:** Updated to probe the TT early for instant Alpha-Beta cutoffs, and to store the correct fail-soft bound at the end of the node evaluation.
+
+### 6F: Advanced Move Ordering (Killers & History)
+* **Files:** `engine/search.c`
+* **`MovesEqual()`, `IsKillerMove()`:** Helper functions to match move structures and detect previous cutoffs.
+* **`Negamax()`:** Updated to record successful quiet moves (Killers) and globally successful quiet moves (History) upon triggering a beta cutoff.
+* **`SortMoves()`:** Overhauled to score and sort in strict priority: PV/TT Move -> Captures (MVV-LVA) -> Promotions -> Killer Moves -> History Heuristic.
 ---
 
 # Phase 7 — UCI & Engine Polish
@@ -185,10 +202,4 @@ A complete, standalone, publicly distributable chess engine.
 ✅ Phase 4
 ✅ Phase 5
 ✅ Phase 5.5
-
-**Current**
-➡ Phase 6
-
-**Next immediate task**
-➡ Implement basic Move Ordering and Iterative Deepening to optimize the Alpha-Beta search tree.
-
+✅ Phase 6

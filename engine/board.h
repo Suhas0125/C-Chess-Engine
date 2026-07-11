@@ -57,6 +57,8 @@ typedef struct{
     int halfmoveClock;
     int fullmoveNumber;
 
+    unsigned long long hashKey; // step 6D Zobrist hashkey
+
 } Board;
 
 

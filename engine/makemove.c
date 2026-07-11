@@ -1,5 +1,7 @@
 #include "makemove.h"
 
+#include "zobrist.h"
+
 // Executes a move on the board.
 void MakeMove(Board *board,History *history, const Move *move){
     // Save the current position before modifying it.
@@ -154,6 +156,9 @@ void MakeMove(Board *board,History *history, const Move *move){
 
     // Switch side to move.
     board->sideToMove = (board->sideToMove == SIDE_WHITE) ? SIDE_BLACK : SIDE_WHITE;
+
+    // Calculate the new hash at the very end
+    board->hashKey = Zobrist_GenerateKey(board);
 }
 
 // Restores the previous board state.

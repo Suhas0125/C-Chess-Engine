@@ -6,6 +6,9 @@
 #define CHECKMATE_SCORE 100000
 #define DRAW_SCORE 0
 
+// Expose GetPieceValue for move ordering (MVV-LVA)
+int GetPieceValue(Piece piece);
+
 // Returns the evaluation of the current position.
 // Positive: White is better.
 // Negative: Black is better.

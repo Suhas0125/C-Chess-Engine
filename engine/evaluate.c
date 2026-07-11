@@ -3,7 +3,7 @@
 
 // Returns the material value of a piece.
 // This function is private to evaluate.c.
-static int GetPieceValue(Piece piece)
+int GetPieceValue(Piece piece)
 {
     switch (piece)
     {

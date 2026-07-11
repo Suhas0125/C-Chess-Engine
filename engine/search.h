@@ -14,10 +14,14 @@ typedef struct{
 } SearchResult;
 
 
+// Quiescence Search: Evaluates tactical captures beyond depth 0
+int QuiescenceSearch(Board *board, History *history, int alpha, int beta, unsigned long long *nodes);
+
 // Returns the evaluation of the position by searching to the given depth using Alpha-Beta pruning
 int Negamax(Board *board,
             History *history,
             int depth,
+            int ply,        // ply - distance from root (step 6C)
             int alpha,
             int beta,
             unsigned long long *nodes);

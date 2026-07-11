@@ -18,6 +18,8 @@
 #include "engine/debug.h"
 #include "engine/perft.h"
 #include "engine/tests.h"
+#include "engine/zobrist.h"
+#include "engine/tt.h"
 
 Renderer renderer;
 
@@ -31,12 +33,6 @@ int main(){
 
     Board board;
     Board_Init(&board);
-    
-    // fen test start
-
-    
-
-    // fen test end
 
     SetTargetFPS(60);
     
@@ -54,19 +50,23 @@ int main(){
     MoveList_Init(&selectedMoves);
 
 // testing start
+    printf("\n========== PHASE 6F VERIFICATION ==========\n");
+    Zobrist_Init(); 
+    TT_Init(64); 
+    
+    Board_FromFEN(&board, "rnbqkbnr/pppppppp/8/8/8/8/PPPPPPPP/RNBQKBNR w KQkq - 0 1");
+    History_Init(&history);
+    board.hashKey = Zobrist_GenerateKey(&board);
 
-    // Run the full automated suite before the Raylib window loop
-    RunAutomatedPerftSuite(&board, &history);
+    printf("Running Iterative Deepening Search to Depth 6 (With TT & Advanced Ordering)...\n");
+    SearchResult result = SearchBestMove(&board, &history, 6);
 
+    printf("\nYou are now searching Depth 6! Look at how efficient the node count is.\n");
+    printf("===========================================\n\n");
+    TT_Free();
 // testing end
 
     while(!WindowShouldClose()){
-
-        // engine testing start
-
-        
-
-        // engine testing end
 
         BeginDrawing();
         ClearBackground(RAYWHITE);
