@@ -129,3 +129,8 @@ The logic in `engine/search.c` was modified to explicitly forbid TT cutoffs at t
 ### 6. Result
 The TT is still probed at the root to extract the ttMove (which is immediately used by the Move Ordering logic to search the absolute best move first), but the root node is now forced to complete its evaluation loop, ensuring a valid, legal move is always returned to the GUI.
 
+### 7. Stability Verification & Stress Testing
+Following the fix of the Root TT Cutoff bug, the engine underwent rigorous competitive testing against Stockfish in multiple full-game matches. 
+* **Reliability:** The engine demonstrated complete stability, successfully executing 50-move sequences against a grandmaster-level opponent without crashing or outputting illegal moves.
+* **Evaluation Accuracy:** The engine correctly identified and tracked declining positions, reliably triggering terminal evaluation scores (e.g., -999.96) when facing forced checkmate sequences.
+* **Protocol Compliance:** The engine maintained seamless communication through the UCI protocol, properly managing time budgets and responding to complex game-state queries under high-pressure conditions.
