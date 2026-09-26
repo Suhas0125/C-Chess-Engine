@@ -5,6 +5,7 @@
 #include "engine/board.h"
 #include "engine/fen.h"
 #include "ui/renderer.h"
+#include "ui/menu.h"
 #include "engine/move.h"
 #include "engine/movegen.h"
 #include "engine/makemove.h"
@@ -25,6 +26,50 @@
 
 Renderer renderer;
 
+// With real clocks, a hard depth-5 cap would leave time on the table in
+// slower controls. Let the clock decide how deep the engine goes instead;
+// this matches search.c's own internal MAX_PLY.
+#define ENGINE_MAX_DEPTH 64
+
+// Time / 30 + Increment / 2, with a safety floor and ceiling, matching the
+// allocation formula already used for wtime/btime in ParseGo() (Phase 7C).
+static long long ComputeTimeBudget(long long remainingMs, long long incrementMs) {
+    long long budget = remainingMs / 30 + incrementMs / 2;
+
+    if (budget > remainingMs - 50) budget = remainingMs - 50;
+    if (budget < 50) budget = 50;
+
+    return budget;
+}
+
+// Runs a timed engine search for whichever side is currently to move,
+// executes the resulting move, and settles that side's clock (search time
+// deducted, increment added). Assumes engineLegalMoves.count > 0.
+static void PlayEngineMove(Board *board, History *history, UIContext *uiCtx,
+                           long long *whiteTimeMs, long long *blackTimeMs, long long incrementMs) {
+
+    long long *engineClock = (board->sideToMove == SIDE_WHITE) ? whiteTimeMs : blackTimeMs;
+    long long budget = ComputeTimeBudget(*engineClock, incrementMs);
+
+    long long searchStart = GetTimeMs();
+    SearchResult result = SearchBestMove(board, history, ENGINE_MAX_DEPTH, budget);
+    long long elapsedMs = GetTimeMs() - searchStart;
+
+    MakeMove(board, history, &result.move);
+    uiCtx->lastMove = result.move;
+    uiCtx->hasLastMove = true;
+
+    *engineClock -= elapsedMs;
+    *engineClock += incrementMs;
+    if (*engineClock < 0) *engineClock = 0;
+}
+
+typedef enum {
+    APP_MENU,
+    APP_PLAYING,
+    APP_GAMEOVER
+} AppState;
+
 int main(int argc, char *argv[]){
 
     // 1. Initialize core systems FIRST (Available to both UCI and Raylib)
@@ -44,16 +89,16 @@ int main(int argc, char *argv[]){
     // whole board = 800×800 (8 × 100)
     int tileSize = 100; // How big each chess square is in pixels
 
-    Board board;
-    Board_FromFEN(&board, "rnbqkbnr/pppppppp/8/8/8/8/PPPPPPPP/RNBQKBNR w KQkq - 0 1");
-    // CRITICAL: Ensure the root position has a hash key generated!
-    board.hashKey = Zobrist_GenerateKey(&board);
-
     SetTargetFPS(60);
     InitRenderer(&renderer);
-    
+
+    AppState appState = APP_MENU;
+    GameSetup setup = {0};
+    bool flipped = false;
+    const char *gameOverMessage = "";
+
+    Board board;
     History history;
-    History_Init(&history);
 
     // Currently selected square (-1 means no selection).
     int selectedRow = -1;
@@ -63,19 +108,117 @@ int main(int argc, char *argv[]){
     MoveList selectedMoves;
     MoveList_Init(&selectedMoves);
 
-    // ... [Everything above this loop remains the same] ...
-    
     UIContext uiCtx = {0};
     int rightClickStartRow = -1;
     int rightClickStartCol = -1;
 
-    while(!WindowShouldClose()) {
+    long long whiteTimeMs = 0;
+    long long blackTimeMs = 0;
+    long long incrementMs = 0;
+    Side humanSide = SIDE_WHITE;
+
+    bool shouldQuit = false;
+
+    while(!WindowShouldClose() && !shouldQuit) {
+
+        // ------------------------------------------------------------
+        // MENU STATE
+        // ------------------------------------------------------------
+        if (appState == APP_MENU) {
+            BeginDrawing();
+            bool started = DrawMenuFrame(&setup);
+            EndDrawing();
+
+            if (started) {
+                humanSide = setup.humanSide;
+                whiteTimeMs = setup.initialMs;
+                blackTimeMs = setup.initialMs;
+                incrementMs = setup.incrementMs;
+                flipped = (humanSide == SIDE_BLACK);
+
+                Board_FromFEN(&board, "rnbqkbnr/pppppppp/8/8/8/8/PPPPPPPP/RNBQKBNR w KQkq - 0 1");
+                board.hashKey = Zobrist_GenerateKey(&board);
+                History_Init(&history);
+
+                selectedRow = -1;
+                selectedCol = -1;
+                MoveList_Init(&selectedMoves);
+                uiCtx = (UIContext){0};
+                rightClickStartRow = -1;
+                rightClickStartCol = -1;
+
+                appState = APP_PLAYING;
+
+                // If the human plays Black, the engine (White) moves first.
+                if (board.sideToMove != humanSide) {
+                    PlayEngineMove(&board, &history, &uiCtx, &whiteTimeMs, &blackTimeMs, incrementMs);
+                }
+            }
+
+            continue;
+        }
+
+        // ------------------------------------------------------------
+        // GAME OVER STATE
+        // ------------------------------------------------------------
+        if (appState == APP_GAMEOVER) {
+            BeginDrawing();
+            ClearBackground(RAYWHITE);
+            DrawGame(&renderer, &board, -1, -1, &selectedMoves, &uiCtx, flipped);
+            DrawClocks(whiteTimeMs, blackTimeMs, board.sideToMove, flipped);
+            GameOverAction action = DrawGameOver(gameOverMessage);
+            EndDrawing();
+
+            if (action == GAMEOVER_PLAY_AGAIN) {
+                appState = APP_MENU; // Falls into the menu branch next frame.
+            } else if (action == GAMEOVER_QUIT) {
+                shouldQuit = true;
+            }
+
+            continue;
+        }
+
+        // ------------------------------------------------------------
+        // PLAYING STATE
+        // ------------------------------------------------------------
+
+        // Real-time clock: decrement whoever's turn it currently is.
+        // (The engine's own thinking time is settled separately, right
+        // after its blocking search call, since no frames render during it.)
+        long long frameMs = (long long)(GetFrameTime() * 1000.0);
+        if (board.sideToMove == SIDE_WHITE) {
+            whiteTimeMs -= frameMs;
+        } else {
+            blackTimeMs -= frameMs;
+        }
+
+        if (whiteTimeMs <= 0) {
+            whiteTimeMs = 0;
+            appState = APP_GAMEOVER;
+            gameOverMessage = "Black wins on time";
+            continue;
+        }
+        if (blackTimeMs <= 0) {
+            blackTimeMs = 0;
+            appState = APP_GAMEOVER;
+            gameOverMessage = "White wins on time";
+            continue;
+        }
+
         Vector2 mousePos = GetMousePosition();
-        int mouseRow = mousePos.y / tileSize;
-        int mouseCol = mousePos.x / tileSize;
-        bool validMouse = (mouseRow >= 0 && mouseRow <= 7 && mouseCol >= 0 && mouseCol <= 7);
+        int rawRow = (int)(mousePos.y / tileSize);
+        int rawCol = (int)(mousePos.x / tileSize);
+        bool validMouse = (rawRow >= 0 && rawRow <= 7 && rawCol >= 0 && rawCol <= 7);
+
+        // Convert screen coordinates to true board coordinates so all
+        // downstream logic (and stored highlights/arrows) stays in board
+        // space regardless of orientation; DrawGame handles the visual flip.
+        int mouseRow = flipped ? 7 - rawRow : rawRow;
+        int mouseCol = flipped ? 7 - rawCol : rawCol;
 
         uiCtx.mousePos = mousePos;
+
+        bool isHumanTurn = (board.sideToMove == humanSide);
 
         // ----------------------------------------------------
         // RIGHT CLICK LOGIC (Highlights and Arrows)
@@ -113,9 +256,9 @@ int main(int argc, char *argv[]){
         }
 
         // ----------------------------------------------------
-        // LEFT CLICK LOGIC (Selection and Dragging)
+        // LEFT CLICK LOGIC (Selection and Dragging) — human only
         // ----------------------------------------------------
-        if (IsMouseButtonPressed(MOUSE_BUTTON_LEFT)) {
+        if (isHumanTurn && IsMouseButtonPressed(MOUSE_BUTTON_LEFT)) {
             uiCtx.highlightCount = 0; 
             uiCtx.arrowCount = 0;
 
@@ -165,8 +308,8 @@ int main(int argc, char *argv[]){
             }
         }
 
-        // Drop piece logic
-        if (IsMouseButtonReleased(MOUSE_BUTTON_LEFT) && uiCtx.isDragging) {
+        // Drop piece logic — human only
+        if (isHumanTurn && IsMouseButtonReleased(MOUSE_BUTTON_LEFT) && uiCtx.isDragging) {
             uiCtx.isDragging = false;
             
             // Only trigger move if we dragged to a new square
@@ -187,10 +330,17 @@ int main(int argc, char *argv[]){
                     MoveList_Init(&selectedMoves);
                     
                     ENGINE_TURN: // Trigger Engine
-                    
+
+                    // The human's move just happened in real time (frameMs
+                    // already accounted for it tick by tick); settle the increment.
+                    if (humanSide == SIDE_WHITE) whiteTimeMs += incrementMs;
+                    else blackTimeMs += incrementMs;
+
                     // Render human move instantly before the engine freezes the thread
                     BeginDrawing();
-                    DrawGame(&renderer, &board, -1, -1, &selectedMoves, &uiCtx);
+                    ClearBackground(RAYWHITE);
+                    DrawGame(&renderer, &board, -1, -1, &selectedMoves, &uiCtx, flipped);
+                    DrawClocks(whiteTimeMs, blackTimeMs, board.sideToMove, flipped);
                     EndDrawing();
 
                     MoveList engineLegalMoves;
@@ -198,11 +348,29 @@ int main(int argc, char *argv[]){
                     GenerateLegalMoves(&board, &history, &engineLegalMoves);
                     
                     if (engineLegalMoves.count > 0) {
-                        // -1 allottedTimeMs means standard fixed depth search (e.g. depth 5)
-                        SearchResult result = SearchBestMove(&board, &history, 5, -1);
-                        MakeMove(&board, &history, &result.move);
-                        uiCtx.lastMove = result.move;
-                        uiCtx.hasLastMove = true;
+                        PlayEngineMove(&board, &history, &uiCtx, &whiteTimeMs, &blackTimeMs, incrementMs);
+
+                        // Check whether the human now has a reply at all.
+                        MoveList replyMoves;
+                        MoveList_Init(&replyMoves);
+                        GenerateLegalMoves(&board, &history, &replyMoves);
+                        if (replyMoves.count == 0) {
+                            appState = APP_GAMEOVER;
+                            if (IsKingInCheck(&board, board.sideToMove)) {
+                                gameOverMessage = (board.sideToMove == SIDE_WHITE)
+                                    ? "Black wins by checkmate" : "White wins by checkmate";
+                            } else {
+                                gameOverMessage = "Draw by stalemate";
+                            }
+                        }
+                    } else {
+                        appState = APP_GAMEOVER;
+                        if (IsKingInCheck(&board, board.sideToMove)) {
+                            gameOverMessage = (board.sideToMove == SIDE_WHITE)
+                                ? "Black wins by checkmate" : "White wins by checkmate";
+                        } else {
+                            gameOverMessage = "Draw by stalemate";
+                        }
                     }
                 }
             }
@@ -210,7 +378,8 @@ int main(int argc, char *argv[]){
 
         BeginDrawing();
         ClearBackground(RAYWHITE);
-        DrawGame(&renderer, &board, selectedRow, selectedCol, &selectedMoves, &uiCtx);
+        DrawGame(&renderer, &board, selectedRow, selectedCol, &selectedMoves, &uiCtx, flipped);
+        DrawClocks(whiteTimeMs, blackTimeMs, board.sideToMove, flipped);
         EndDrawing();
     }
 

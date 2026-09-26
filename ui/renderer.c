@@ -1,6 +1,7 @@
 #include "renderer.h"
 #include "../engine/move.h"
 #include <math.h>
+#include <stdio.h>
 
 // -------------------------
 // internal helper
@@ -8,6 +9,11 @@
 static Texture2D LoadPieceTexture(const char *path){
     return LoadTexture(path);
 }
+
+// Maps a true board row/col to the screen row/col it should be drawn at.
+// Board coordinates never change; only where they land on screen does.
+static int ToScreenRow(int row, bool flipped) { return flipped ? 7 - row : row; }
+static int ToScreenCol(int col, bool flipped) { return flipped ? 7 - col : col; }
 
 // Draws a piece at exact pixel coordinates (useful for dragging)
 static void DrawPieceEx(Piece p, float x, float y, int tileSize, PieceTextures *tex){
@@ -88,7 +94,7 @@ void UnloadRenderer(Renderer *r) {
     UnloadTexture(r->tex.bR); UnloadTexture(r->tex.bQ); UnloadTexture(r->tex.bK);
 }
 
-void DrawGame(Renderer *r, Board *board, int selectedRow, int selectedCol, MoveList *selectedMoves, UIContext *ctx) {
+void DrawGame(Renderer *r, Board *board, int selectedRow, int selectedCol, MoveList *selectedMoves, UIContext *ctx, bool flipped) {
     int ts = r->tileSize;
 
     // 1. Draw Board & Highlights
@@ -115,7 +121,9 @@ void DrawGame(Renderer *r, Board *board, int selectedRow, int selectedCol, MoveL
                 color = GOLD;
             }
 
-            DrawRectangle(col * ts, row * ts, ts, ts, color);
+            int sr = ToScreenRow(row, flipped);
+            int sc = ToScreenCol(col, flipped);
+            DrawRectangle(sc * ts, sr * ts, ts, ts, color);
         }
     }
 
@@ -126,15 +134,19 @@ void DrawGame(Renderer *r, Board *board, int selectedRow, int selectedCol, MoveL
                 continue; 
             }
             Piece p = board->squares[row][col];
-            DrawPieceEx(p, col * ts, row * ts, ts, &r->tex);
+            int sr = ToScreenRow(row, flipped);
+            int sc = ToScreenCol(col, flipped);
+            DrawPieceEx(p, sc * ts, sr * ts, ts, &r->tex);
         }
     }
 
     // 3. Draw Legal Moves (On top of pieces)
     for (int i = 0; i < selectedMoves->count; i++) {
         Move move = selectedMoves->moves[i];
-        float centerX = move.toCol * ts + ts / 2.0f;
-        float centerY = move.toRow * ts + ts / 2.0f;
+        int sr = ToScreenRow(move.toRow, flipped);
+        int sc = ToScreenCol(move.toCol, flipped);
+        float centerX = sc * ts + ts / 2.0f;
+        float centerY = sr * ts + ts / 2.0f;
 
         if (board->squares[move.toRow][move.toCol] != EMPTY || (move.flags & MOVE_EN_PASSANT)) {
             // Draw a thick ring for captures
@@ -147,14 +159,89 @@ void DrawGame(Renderer *r, Board *board, int selectedRow, int selectedCol, MoveL
 
     // 4. Draw Arrows
     for (int i = 0; i < ctx->arrowCount; i++) {
-        Vector2 start = { ctx->arrows[i].fromCol * ts + ts/2.0f, ctx->arrows[i].fromRow * ts + ts/2.0f };
-        Vector2 end = { ctx->arrows[i].toCol * ts + ts/2.0f, ctx->arrows[i].toRow * ts + ts/2.0f };
+        int fsr = ToScreenRow(ctx->arrows[i].fromRow, flipped);
+        int fsc = ToScreenCol(ctx->arrows[i].fromCol, flipped);
+        int tsr = ToScreenRow(ctx->arrows[i].toRow, flipped);
+        int tsc = ToScreenCol(ctx->arrows[i].toCol, flipped);
+        Vector2 start = { fsc * ts + ts/2.0f, fsr * ts + ts/2.0f };
+        Vector2 end = { tsc * ts + ts/2.0f, tsr * ts + ts/2.0f };
         DrawArrow(start, end, (Color){255, 170, 0, 200});
     }
 
-    // 5. Draw Dragged Piece (On top of everything)
+    // 5. Draw Dragged Piece (On top of everything, follows raw mouse pixels)
     if (ctx->isDragging) {
         Piece p = board->squares[ctx->dragRow][ctx->dragCol];
         DrawPieceEx(p, ctx->mousePos.x - ts / 2, ctx->mousePos.y - ts / 2, ts, &r->tex);
     }
+}
+
+// Formats milliseconds as mm:ss, clamped at zero.
+static void FormatClock(long long ms, char *buf, int bufSize) {
+    if (ms < 0) ms = 0;
+    long long totalSeconds = ms / 1000;
+    int minutes = (int)(totalSeconds / 60);
+    int seconds = (int)(totalSeconds % 60);
+    snprintf(buf, bufSize, "%02d:%02d", minutes, seconds);
+}
+
+static void DrawClockLabel(const char *sideName, long long timeMs, int y, bool active) {
+    char timeText[16];
+    FormatClock(timeMs, timeText, sizeof(timeText));
+
+    char full[48];
+    snprintf(full, sizeof(full), "%s  %s", sideName, timeText);
+
+    int fontSize = 22;
+    int textWidth = MeasureText(full, fontSize);
+    Rectangle bg = { 8, (float)y, textWidth + 16.0f, 30 };
+
+    Color bgColor = active ? (Color){255, 215, 0, 210} : (Color){0, 0, 0, 140};
+    Color textColor = active ? BLACK : RAYWHITE;
+
+    DrawRectangleRec(bg, bgColor);
+    DrawText(full, 16, y + 4, fontSize, textColor);
+}
+
+void DrawClocks(long long whiteTimeMs, long long blackTimeMs, Side sideToMove, bool flipped) {
+    // Place each clock on the screen edge matching that color's home rank
+    // (board row 7 = White's rank, row 0 = Black's rank).
+    int whiteScreenRow = ToScreenRow(7, flipped);
+    int blackScreenRow = ToScreenRow(0, flipped);
+
+    int whiteY = (whiteScreenRow == 0) ? 8 : 762;
+    int blackY = (blackScreenRow == 0) ? 8 : 762;
+
+    DrawClockLabel("White", whiteTimeMs, whiteY, sideToMove == SIDE_WHITE);
+    DrawClockLabel("Black", blackTimeMs, blackY, sideToMove == SIDE_BLACK);
+}
+
+GameOverAction DrawGameOver(const char *message) {
+    DrawRectangle(0, 300, 800, 200, (Color){0, 0, 0, 190});
+
+    int fontSize = 28;
+    int textWidth = MeasureText(message, fontSize);
+    DrawText(message, (800 - textWidth) / 2, 335, fontSize, RAYWHITE);
+
+    Rectangle playAgainBtn = { 220, 410, 160, 50 };
+    Rectangle quitBtn = { 420, 410, 160, 50 };
+
+    Vector2 mouse = GetMousePosition();
+    bool hoverPlay = CheckCollisionPointRec(mouse, playAgainBtn);
+    bool hoverQuit = CheckCollisionPointRec(mouse, quitBtn);
+
+    DrawRectangleRec(playAgainBtn, hoverPlay ? (Color){150, 230, 150, 255} : (Color){110, 190, 110, 255});
+    DrawRectangleLinesEx(playAgainBtn, 2, DARKGRAY);
+    const char *playLabel = "Play Again";
+    int playWidth = MeasureText(playLabel, 20);
+    DrawText(playLabel, (int)(playAgainBtn.x + (playAgainBtn.width - playWidth) / 2.0f), (int)(playAgainBtn.y + 15), 20, BLACK);
+
+    DrawRectangleRec(quitBtn, hoverQuit ? (Color){230, 150, 150, 255} : (Color){190, 110, 110, 255});
+    DrawRectangleLinesEx(quitBtn, 2, DARKGRAY);
+    const char *quitLabel = "Quit";
+    int quitWidth = MeasureText(quitLabel, 20);
+    DrawText(quitLabel, (int)(quitBtn.x + (quitBtn.width - quitWidth) / 2.0f), (int)(quitBtn.y + 15), 20, BLACK);
+
+    if (hoverPlay && IsMouseButtonPressed(MOUSE_BUTTON_LEFT)) return GAMEOVER_PLAY_AGAIN;
+    if (hoverQuit && IsMouseButtonPressed(MOUSE_BUTTON_LEFT)) return GAMEOVER_QUIT;
+    return GAMEOVER_NONE;
 }
